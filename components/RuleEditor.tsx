@@ -1,9 +1,11 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { ParseRule, RuleFileType } from "@/lib/engine/types";
+import type { ParseRule, RuleFileType, RuleSpec } from "@/lib/engine/types";
 import type { NormalizedDocument } from "@/lib/ir/types";
 import { executeRule } from "@/lib/engine/executor";
+import { normalizeFile, summarize } from "@/lib/client/parse";
+import RuleSpecEditor from "./RuleSpecEditor";
 
 interface Props {
   open: boolean;
@@ -34,6 +36,16 @@ export default function RuleEditor({ open, onClose, initialRule, docSummary, doc
   const [saving, setSaving] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
 
+  // 编辑器内可自选匹配文件（父级未提供时启用）
+  const [localDoc, setLocalDoc] = useState<NormalizedDocument | null>(null);
+  const [localFileName, setLocalFileName] = useState("");
+  const [fileLoading, setFileLoading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const localSummary = useMemo(() => (localDoc ? summarize(localDoc) : null), [localDoc]);
+  const effDoc = doc ?? localDoc;
+  const effSummary = docSummary ?? localSummary;
+
   useEffect(() => {
     if (!open) return;
     if (initialRule) {
@@ -59,11 +71,37 @@ export default function RuleEditor({ open, onClose, initialRule, docSummary, doc
     [fieldMeta]
   );
 
+  // 解析当前 JSON 得到 spec，供两列映射视图使用
+  const spec = useMemo(() => {
+    try {
+      const v = JSON.parse(specText);
+      return v && typeof v === "object" ? (v as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  }, [specText]);
+
+  const updateSpec = (next: RuleSpec) => setSpecText(JSON.stringify(next, null, 2));
+
+  const handlePickFile = async (f: File) => {
+    setFileLoading(true);
+    try {
+      const d = await normalizeFile(f);
+      setLocalDoc(d);
+      setLocalFileName(f.name);
+      toast.success(`已加载文件：${f.name}，可用 AI 生成或试解析`);
+    } catch (e) {
+      toast.error(`文件读取失败：${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setFileLoading(false);
+    }
+  };
+
   if (!open) return null;
 
   const handleAiGenerate = async () => {
-    if (!docSummary) {
-      toast.error("请先上传文件，AI 需要文件结构来分析");
+    if (!effSummary) {
+      toast.error("请先选择匹配文件，AI 需要文件结构来分析");
       return;
     }
     setAiLoading(true);
@@ -72,7 +110,7 @@ export default function RuleEditor({ open, onClose, initialRule, docSummary, doc
       const resp = await fetch("/api/rules/ai-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ summary: docSummary }),
+        body: JSON.stringify({ summary: effSummary }),
       });
       const json = await resp.json();
       if (!json.ok) throw new Error(json.error || "AI 生成失败");
@@ -91,14 +129,14 @@ export default function RuleEditor({ open, onClose, initialRule, docSummary, doc
   };
 
   const handleTest = () => {
-    if (!doc) {
-      toast.error("没有可用于试解析的文件");
+    if (!effDoc) {
+      toast.error("没有可用于试解析的文件，请先选择匹配文件");
       return;
     }
     try {
       const spec = JSON.parse(specText);
       const rule: ParseRule = { name: name || "测试规则", fileType, spec };
-      const result = executeRule(doc, rule);
+      const result = executeRule(effDoc, rule);
       const items = result.waybills.reduce((s, w) => s + w.items.length, 0);
       setTestResult(`试解析成功：${result.waybills.length} 个运单 / ${items} 个物品行${result.warnings.length ? "；警告：" + result.warnings.join("，") : ""}`);
     } catch (e) {
@@ -169,11 +207,27 @@ export default function RuleEditor({ open, onClose, initialRule, docSummary, doc
           <input className="input" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="描述该规则适用的文件结构" />
         </div>
 
-        <div className="flex items-center gap-2 mb-2">
-          <button className="btn btn-ghost" onClick={handleAiGenerate} disabled={aiLoading || !docSummary}>
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <button className="btn btn-outline" onClick={() => fileRef.current?.click()} disabled={fileLoading}>
+            {fileLoading ? <span className="spinner spinner-dark" /> : "📄"} 选择匹配文件
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xlsx,.xls,.docx,.pdf"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handlePickFile(f);
+              e.target.value = "";
+            }}
+          />
+          {localFileName && <span className="tag">{localFileName}</span>}
+
+          <button className="btn btn-ghost" onClick={handleAiGenerate} disabled={aiLoading || !effSummary}>
             {aiLoading ? <span className="spinner spinner-dark" /> : "✨"} AI 分析并生成规则
           </button>
-          <button className="btn btn-outline" onClick={handleTest} disabled={!doc}>
+          <button className="btn btn-outline" onClick={handleTest} disabled={!effDoc}>
             试解析当前文件
           </button>
           {source === "ai" && <span className="tag tag-warn">AI 生成 · 需人工确认</span>}
@@ -194,10 +248,18 @@ export default function RuleEditor({ open, onClose, initialRule, docSummary, doc
           </div>
         )}
 
-        <label className="block text-sm text-ink-2 mb-1">规则 JSON（RuleSpec）</label>
+        {spec && (spec as { layout?: unknown }).layout ? (
+          <RuleSpecEditor spec={spec as unknown as RuleSpec} fieldMeta={fieldMeta} onChange={updateSpec} />
+        ) : (
+          <div className="rounded-lg bg-danger-soft p-3 text-sm text-danger">
+            规则 JSON 格式不正确或缺少 layout，无法显示映射；请先在下方修正 JSON。
+          </div>
+        )}
+
+        <div className="mt-4 mb-1 text-sm text-ink-2">高级：规则 JSON（RuleSpec，含布局/跳过等）</div>
         <textarea
           className="input font-mono !text-xs"
-          style={{ minHeight: 280, whiteSpace: "pre" }}
+          style={{ minHeight: 220, whiteSpace: "pre" }}
           value={specText}
           onChange={(e) => setSpecText(e.target.value)}
           spellCheck={false}
