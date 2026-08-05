@@ -3,9 +3,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const items = [
-  { href: "/", label: "文件导入", icon: "⬆️" },
+  { href: "/", label: "异步导入", icon: "⬆️" },
+  { href: "/tasks", label: "导入任务", icon: "🧾" },
+  { href: "/monitor", label: "监控看板", icon: "📈" },
+  { href: "/traces", label: "Trace 检索", icon: "🔍" },
   { href: "/rules", label: "解析规则", icon: "⚙️" },
   { href: "/waybills", label: "已导入运单", icon: "📦" },
+  { href: "/legacy", label: "旧版同步导入", icon: "🕘" },
 ];
 
 export default function Nav() {

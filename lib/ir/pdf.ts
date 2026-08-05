@@ -66,9 +66,10 @@ async function loadPdfjs() {
  * 将 PDF 归一化为 IR：按 y 坐标把文本项重组成行，保留阅读顺序。
  * PDF 坐标系 y 向上增大，因此按 y 降序、x 升序排列。
  */
-export async function normalizePdf(buf: ArrayBuffer, fileName: string): Promise<NormalizedDocument> {
+export async function normalizePdf(buf: ArrayBuffer | Uint8Array, fileName: string): Promise<NormalizedDocument> {
   const pdfjs = await loadPdfjs();
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  const doc = await pdfjs.getDocument({ data: bytes }).promise;
   const pages: { index: number; lines: string[] }[] = [];
   const allLines: string[] = [];
 

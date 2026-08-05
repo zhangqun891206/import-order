@@ -25,3 +25,16 @@ export async function ping(): Promise<{ ok: boolean; detail?: string }> {
     return { ok: false, detail: e instanceof Error ? e.message : String(e) };
   }
 }
+
+/**
+ * 可直接使用的查询入口：既可 db`SELECT...` 也可 db.query(sql, params)。
+ * 通过 Proxy 惰性绑定底层 Neon 查询函数。
+ */
+export const db = new Proxy((() => undefined) as unknown as NeonQueryFunction<boolean, boolean>, {
+  get(_t, prop) {
+    return Reflect.get(sql(), prop);
+  },
+  apply(_t, _thisArg, args) {
+    return Reflect.apply(sql() as unknown as (...a: unknown[]) => unknown, undefined, args);
+  },
+});

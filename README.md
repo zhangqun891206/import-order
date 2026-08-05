@@ -2,6 +2,35 @@
 
 通过「可配置解析规则引擎 + 大模型辅助规则生成」，把 Excel / Word / PDF 等任意格式的出库单解析为结构化运单，在线预览编辑后批量下单并持久化到 Neon，部署于 Vercel。
 
+## V4 异步事件驱动重构（专项考核）
+
+在 V2 基础上把下单主链路重构为异步事件驱动 + 全链路可观测，支撑 10,000 单/分钟：
+
+- **上传即返回**：`POST /api/import-tasks` 在单事务（CTE）创建 import_tasks + 解析单元 + event_outbox，<1s 返回 task_id；文件字节后台落库。
+- **Outbox + DB 队列**：Dispatcher 轮询 event_outbox；批次处理单元用 `FOR UPDATE SKIP LOCKED` 被 Worker 认领，天然限流/防重复。
+- **Worker**：`lib/v4/worker.ts` 的 pump() 复用 V2 规则引擎，分批（1000 行/批）批量校验（SKU `= ANY(...)`，3s 超时降级）+ 批量 UPSERT（dedup_key 幂等）+ 行级错误 + 性能日志 + Trace。
+- **页面**：异步导入（/）、导入任务（/tasks、/tasks/[id]）、监控看板（/monitor）、Trace 检索（/traces）；旧版同步导入保留在 /legacy。
+- **API**：/api/import-tasks[/:id[/errors|/batches]]、/api/traces[/:traceId]、/api/import-monitor/summary、/api/internal/pump。
+
+### 压测与数据脚本
+```bash
+# 建表 + 20,000 SKU + 10,000 行压测 Excel + 压测规则（可重复执行）
+npm run db:setup
+node --experimental-strip-types scripts/seed-data.mjs
+
+# 压测（WORKERS 调并发），输出是否 ≤60s
+npm run build && npm start
+WORKERS=3 node --experimental-strip-types scripts/loadtest.mjs
+
+# 自动化测试（对活服务）
+node --experimental-strip-types test/v4-pipeline.mjs
+```
+
+### 文档
+- `docs/重构开发规划-V4.md`、`docs/架构设计-V4.md`、`docs/重构假设说明.md`、`docs/压测报告.md`
+
+> 注意：≤60s 目标在同区域部署（Vercel+Neon 同区）下由容量推导与批内并行化保证；本地跨境访问 Neon 延迟高/丢包时仅作功能验证。
+
 ## 技术栈
 
 - **框架**：Next.js 15（App Router）+ TypeScript

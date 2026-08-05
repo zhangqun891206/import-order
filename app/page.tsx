@@ -1,12 +1,6 @@
-"use client";
-import dynamic from "next/dynamic";
+import AsyncImport from "@/components/AsyncImport";
 
-// 导入流程完全在浏览器运行（文件解析 / pdfjs / 虚拟表格），禁用 SSR 预渲染。
-const ImportFlow = dynamic(() => import("@/components/ImportFlow"), {
-  ssr: false,
-  loading: () => <div className="card p-10 text-center text-ink-3 text-sm">加载中…</div>,
-});
-
+// V4 主链路：异步事件驱动导入（上传即返回 task_id）
 export default function Home() {
-  return <ImportFlow />;
+  return <AsyncImport />;
 }
