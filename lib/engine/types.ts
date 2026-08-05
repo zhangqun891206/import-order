@@ -69,7 +69,12 @@ export interface MatrixLayout {
   value: { skipEmptyOrZero: boolean };
   expandTo: "records";
   /** 复合单元格拆分（周配送计划） */
-  cellSplit?: { delimiter: string; itemPattern: string };
+  cellSplit?: {
+    delimiter: string;
+    itemPattern: string;
+    /** 捕获组 → 目标字段 映射，如 { skuName: 1, skuQty: 2 } */
+    groups?: Partial<Record<TargetField, number>>;
+  };
   /** 矩阵值 → 哪个目标字段（默认 skuQty） */
   valueTarget?: TargetField;
   /** 列头 → 哪个目标字段（默认 store） */
@@ -89,6 +94,8 @@ export interface TextLayout {
   type: "text";
   recordSeparator?: { regex: string };
   itemLine: { regex: string; groups: Record<string, number> };
+  /** 折行合并：以 lineStartRegex 判定一条逻辑行的起始，其余行并入上一条 */
+  textMerge?: { lineStartRegex: string };
 }
 
 export interface MultiDocLayout {
