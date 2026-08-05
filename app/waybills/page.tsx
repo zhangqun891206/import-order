@@ -83,9 +83,10 @@ export default function WaybillsPage() {
                   <tr>
                     <th>外部编码</th>
                     <th>收货方式</th>
-                    <th>收货门店/收件人</th>
-                    <th>电话</th>
-                    <th>地址</th>
+                    <th>收货门店</th>
+                    <th>收件人</th>
+                    <th>收货电话</th>
+                    <th>收货地址</th>
                     <th>物品行数</th>
                     <th>提交时间</th>
                   </tr>
@@ -95,7 +96,8 @@ export default function WaybillsPage() {
                     <tr key={w.id}>
                       <td className="font-medium text-ink">{w.externalCode || "—"}</td>
                       <td><span className={`tag ${w.receiverMode === "A" ? "" : "tag-warn"}`}>{w.receiverMode === "A" ? "门店" : "收件人"}</span></td>
-                      <td>{w.storeName || w.receiverName || "—"}</td>
+                      <td>{w.storeName || "—"}</td>
+                      <td>{w.receiverName || "—"}</td>
                       <td>{w.receiverPhone || "—"}</td>
                       <td className="max-w-[220px] truncate" title={w.receiverAddress || ""}>{w.receiverAddress || "—"}</td>
                       <td>{w.itemCount}</td>

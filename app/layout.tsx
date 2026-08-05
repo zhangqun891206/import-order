@@ -16,8 +16,10 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body className="antialiased">
-        <Nav />
-        <main className="mx-auto w-full max-w-[1200px] px-4 py-6 md:px-6">{children}</main>
+        <div className="flex min-h-screen">
+          <Nav />
+          <main className="min-w-0 flex-1 px-4 py-6 md:px-8">{children}</main>
+        </div>
         <Toaster richColors position="top-center" />
       </body>
     </html>

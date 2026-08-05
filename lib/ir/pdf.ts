@@ -10,19 +10,54 @@ interface PdfTextItem {
 
 let pdfjsPromise: Promise<typeof import("pdfjs-dist")> | null = null;
 
+/**
+ * 旧浏览器的 ReadableStream.prototype 缺少 Symbol.asyncIterator，
+ * 而 pdfjs getTextContent 内部用 `for await (... of readableStream)`。
+ * 这里补一个基于 getReader 的 async iterator polyfill。
+ */
+function ensureReadableStreamAsyncIterable() {
+  const g = globalThis as unknown as {
+    ReadableStream?: { prototype: Record<symbol, unknown> };
+  };
+  const RS = g.ReadableStream;
+  if (!RS || !Symbol.asyncIterator || RS.prototype[Symbol.asyncIterator]) return;
+  RS.prototype[Symbol.asyncIterator] = async function* () {
+    const reader = (this as unknown as ReadableStream).getReader();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) return;
+        yield value;
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  };
+}
+
 async function loadPdfjs() {
   if (!pdfjsPromise) {
-    pdfjsPromise = import("pdfjs-dist").then((pdfjs) => {
+    pdfjsPromise = (async () => {
+      ensureReadableStreamAsyncIterable();
+      // 用 legacy 构建：内置 core-js polyfill，兼容缺少全局 Iterator 的旧浏览器
+      const mod = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      const pdfjs = mod as unknown as typeof import("pdfjs-dist");
+      const workerUrl = () =>
+        new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url).toString();
       try {
-        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-          "pdfjs-dist/build/pdf.worker.min.mjs",
-          import.meta.url
-        ).toString();
+        // webpack/Next 识别 new Worker(new URL(...)) 并单独打包 worker chunk
+        pdfjs.GlobalWorkerOptions.workerPort = new Worker(new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url), {
+          type: "module",
+        });
       } catch {
-        // 回退：pdfjs 使用 fake worker（主线程）
+        try {
+          pdfjs.GlobalWorkerOptions.workerSrc = workerUrl();
+        } catch {
+          // 回退：fake worker（主线程）
+        }
       }
       return pdfjs;
-    });
+    })();
   }
   return pdfjsPromise;
 }
