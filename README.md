@@ -27,7 +27,7 @@ node --experimental-strip-types test/v4-pipeline.mjs
 ```
 
 ### 文档
-- `docs/重构开发规划-V4.md`、`docs/架构设计-V4.md`、`docs/重构假设说明.md`、`docs/压测报告.md`、`docs/接口文档.md`、`docs/提交物清单.md`
+- `docs/重构开发规划-V4.md`、`docs/架构设计-V4.md`、`docs/重构假设说明.md`、`docs/压测报告.md`、`docs/接口文档.md`、`docs/提交物清单.md`、`docs/大模型调用说明.md`、`docs/项目反思.md`
 
 ### 故障模拟
 - **SKU 校验降级**：临时把 `sku_master` 改名或断开其查询（如将校验查询指向不存在的表）使 SKU 查询 >3s/失败，上传任务后任务详情页应显示「⚠️ SKU 校验已降级」，且 `degraded=true`、`unverified_sku_rows` 记录未校验行数；恢复后新任务自动回到完整校验。
