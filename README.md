@@ -27,7 +27,13 @@ node --experimental-strip-types test/v4-pipeline.mjs
 ```
 
 ### 文档
-- `docs/重构开发规划-V4.md`、`docs/架构设计-V4.md`、`docs/重构假设说明.md`、`docs/压测报告.md`
+- `docs/重构开发规划-V4.md`、`docs/架构设计-V4.md`、`docs/重构假设说明.md`、`docs/压测报告.md`、`docs/接口文档.md`、`docs/提交物清单.md`
+
+### 故障模拟
+- **SKU 校验降级**：临时把 `sku_master` 改名或断开其查询（如将校验查询指向不存在的表）使 SKU 查询 >3s/失败，上传任务后任务详情页应显示「⚠️ SKU 校验已降级」，且 `degraded=true`、`unverified_sku_rows` 记录未校验行数；恢复后新任务自动回到完整校验。
+- **重试与幂等**：上传同一文件两次，或手动重复调用 `POST /api/internal/pump`，观察 waybills 不产生重复（dedup_key 唯一）、进度不重复累计。
+- **卡死回收**：把某批次 `import_task_batches.status` 手动置为 `processing` 且 `locked_at` 早于 90 秒，下一次 pump 会重新认领处理。
+- **部分失败**：压测文件内置 ~1% 非法行（E001/E002/E003/E004/E005），任务最终为 `partial_success`，成功行入库、失败行可在错误页按批次/错误码筛选并导出。
 
 > 注意：≤60s 目标在同区域部署（Vercel+Neon 同区）下由容量推导与批内并行化保证；本地跨境访问 Neon 延迟高/丢包时仅作功能验证。
 
